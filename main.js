@@ -9,7 +9,7 @@ function createWindow(){
 
     });
 
-    win.loadFile('index.html');
+    win.loadFile('GALAXY STONE REPORT.html');
 
     win.removeMenu();
 
