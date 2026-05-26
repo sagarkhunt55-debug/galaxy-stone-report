@@ -2,7 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { machineIdSync } = require('node-machine-id');
+
+let machineIdSync;
+
+try {
+    machineIdSync = require('node-machine-id').machineIdSync;
+} catch (e) {
+    machineIdSync = null;
+}
 
 const SECRET = "GALAXY_STONE_SECRET";
 
@@ -15,22 +22,44 @@ function generateKey(id) {
         .toUpperCase();
 }
 
-const licensePath = path.join(app.getPath('userData'), "license.json");
+// REAL MACHINE ID (safe fallback improved)
+function getMachineId() {
+    if (machineIdSync) {
+        try {
+            return machineIdSync();
+        } catch (e) {
+            return app.getPath('home');
+        }
+    }
+    return app.getPath('home');
+}
 
+function licensePath() {
+    return path.join(app.getPath('userData'), "license.json");
+}
+
+// SAFE READ
 function getSavedLicense() {
     try {
-        return JSON.parse(fs.readFileSync(licensePath));
+        const data = fs.readFileSync(licensePath(), 'utf8');
+        return JSON.parse(data);
     } catch {
         return null;
     }
 }
 
+// SAFE WRITE
 function saveLicense(key) {
-    fs.writeFileSync(licensePath, JSON.stringify({ key }));
+    try {
+        fs.writeFileSync(licensePath(), JSON.stringify({ key }));
+    } catch (e) {
+        console.log("License save failed");
+    }
 }
 
+// VALIDATION
 function isValid(key) {
-    const id = machineIdSync();
+    const id = getMachineId();
     const correct = generateKey(id);
     return key === correct;
 }
@@ -56,14 +85,14 @@ app.whenReady().then(() => {
     const saved = getSavedLicense();
 
     if (saved && isValid(saved.key)) {
-        createWindow("GALAXY STONE REPORT.html");
+        createWindow("index.html");
     } else {
         createWindow("license.html");
     }
 
 });
 
-// from license page
+// LICENSE CHECK
 ipcMain.on("check-license", (event, key) => {
 
     if (isValid(key)) {
@@ -74,7 +103,7 @@ ipcMain.on("check-license", (event, key) => {
             message: "License Activated Successfully"
         });
 
-        win.loadFile("GALAXY STONE REPORT.html");
+        win.loadFile("index.html");
 
     } else {
         dialog.showErrorBox("Error", "Invalid License Key");
