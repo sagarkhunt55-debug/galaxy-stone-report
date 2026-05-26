@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Galaxy Stone Report</title>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial;
+}
+
+body{
+    background:#edf2f7;
+    padding:15px;
+}
+
+.top{
+    background:white;
+    padding:20px;
+    border-radius:5px;
+    margin-bottom:15px;
+    border:1px solid #dbe2ec;
+}
+
+h2{
+    color:#4e73df;
+    margin-bottom:15px;
+}
+
+.controls{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:15px;
+}
+
+label{
+    display:block;
+    margin-bottom:5px;
+    font-size:13px;
+    font-weight:bold;
+}
+
+input,select{
+    width:100%;
+    height:40px;
+    border:1px solid #c8d2e2;
+    border-radius:4px;
+    padding:0 10px;
+}
+
+.buttons{
+    display:flex;
+    gap:10px;
+    margin-top:20px;
+    flex-wrap:wrap;
+}
+
+button{
+    height:40px;
+    padding:0 20px;
+    border:none;
+    border-radius:4px;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.generate{
+    background:#2ac66f;
+}
+
+.print{
+    background:#4e73df;
+}
+
+.reload{
+    background:#ff8b3e;
+}
+
+.summary{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:10px;
+    margin-top:20px;
+}
+
+.card{
+    background:#f7f9ff;
+    border:1px solid #dde5f4;
+    border-radius:5px;
+    padding:12px;
+    text-align:center;
+}
+
+.card-title{
+    font-size:13px;
+    color:#666;
+}
+
+.card-value{
+    font-size:24px;
+    color:#4e73df;
+    margin-top:5px;
+    font-weight:bold;
+}
+
+.table-box{
+    background:white;
+    border:1px solid #dbe2ec;
+    border-radius:5px;
+    overflow:auto;
+}
+
+.report-title{
+    text-align:center;
+    font-size:28px;
+    color:#5b7df0;
+    padding:15px;
+    font-weight:bold;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:1200px;
+}
+
+th{
+    background:#97a4ba;
+    color:white;
+    border:1px solid #dce3ef;
+    padding:8px;
+    font-size:12px;
+}
+
+td{
+    border:1px solid #e2e8f2;
+    padding:7px;
+    text-align:center;
+    font-size:12px;
+}
+
+tr:nth-child(even){
+    background:#fafcff;
+}
+
+.green{
+    background:#c8f7d2;
+}
+
+.purple{
+    background:#f3d4f8;
+}
+
+.status{
+    margin-top:10px;
+    color:#2aa15c;
+    font-weight:bold;
+}
+
+@media print{
+
+    .top{
+        display:none;
+    }
+
+    body{
+        background:white;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="top">
+
+<h2>Galaxy Stone Live Report</h2>
+
+<div class="controls">
+
+<div>
+<label>Select CSV Folder</label>
+<input type="file" id="folder" webkitdirectory multiple>
+</div>
+
+<div>
+<label>Select Kapan No</label>
+<select id="kapan">
+<option value="">Select Kapan No</option>
+</select>
+</div>
+
+<div>
+<label>Search Packet</label>
+<input type="text" id="search" placeholder="Search Packet">
+</div>
+
+</div>
+
+<div class="buttons">
+
+<button class="generate" onclick="filterData()">
+Generate Report
+</button>
+
+<button class="print" onclick="window.print()">
+Print / PDF
+</button>
+
+<button class="reload" onclick="reloadReport()">
+Reload
+</button>
+
+</div>
+
+<div class="status" id="status">
+Waiting for CSV Folder...
+</div>
+
+<div class="summary">
+
+<div class="card">
+<div class="card-title">Total Packets</div>
+<div class="card-value" id="pcs">0</div>
+</div>
+
+<div class="card">
+<div class="card-title">Total MK.Pcs</div>
+<div class="card-value" id="rows">0</div>
+</div>
+
+<div class="card">
+<div class="card-title">Total E P C</div>
+<div class="card-value" id="epcTotal">0</div>
+</div>
+
+<div class="card">
+<div class="card-title">Total Weight</div>
+<div class="card-value" id="wt">0</div>
+</div>
+
+<div class="card">
+<div class="card-title">Total RTO %</div>
+<div class="card-value" id="rto">0</div>
+</div>
+
+</div>
+
+</div>
+
+<div class="table-box">
+
+<div class="report-title">
+Lot Wise Summary Report
+</div>
+
+<table>
+
+<thead id="head"></thead>
+
+<tbody id="body"></tbody>
+
+</table>
+
+</div>
+
+<script>
+
+let allFiles = [];
+let grouped = {};
+let currentData = [];
+
+document.getElementById('folder')
+.addEventListener('change', function(e){
+
+    allFiles =
+        Array.from(e.target.files)
+        .filter(file =>
+            file.name.toLowerCase().endsWith('.csv')
+        );
+
+    grouped = {};
+
+    allFiles.forEach(file => {
+
+        let fileName =
+            file.name.replace(/\.[^/.]+$/, "");
+
+        let splitData =
+            fileName.split('-');
+
+        let kapan =
+            splitData[0];
+
+        if(!grouped[kapan]){
+
+            grouped[kapan] = [];
+
+        }
+
+        grouped[kapan].push(file);
+
+    });
+
+    let select =
+        document.getElementById('kapan');
+
+    select.innerHTML =
+        '<option value="">Select Kapan No</option>';
+
+    Object.keys(grouped).forEach(k => {
+
+        let op =
+            document.createElement('option');
+
+        op.value = k;
+        op.textContent = k;
+
+        select.appendChild(op);
+
+    });
+
+    document.getElementById('status')
+    .innerHTML =
+        Object.keys(grouped).length +
+        ' Kapan No Found';
+
+});
+
+document.getElementById('kapan')
+.addEventListener('change', function(){
+
+    loadKapan(this.value);
+
+});
+
+async function loadKapan(kapan){
+
+    currentData = [];
+
+    let files = grouped[kapan];
+
+    if(!files){
+
+        return;
+
+    }
+
+    for(let file of files){
+
+        await new Promise(resolve => {
+
+            Papa.parse(file,{
+
+                header:true,
+                skipEmptyLines:true,
+
+                complete:function(result){
+
+                    let rows =
+                        result.data;
+
+                    let fileName =
+                        file.name.replace(/\.[^/.]+$/, "");
+
+                    let splitData =
+                        fileName.split('-');
+
+                    let kapanNo =
+                        splitData[0];
+
+                    let pktNo =
+                        splitData[1];
+
+                    /*
+                    MK PCS =
+                    HIGHEST NUMBER IN PartName
+                    */
+
+                    let mkPcs = 0;
+
+                    /*
+                    MK CTS =
+                    TOTAL WT
+                    */
+
+                    let mkCts = 0;
+
+                    /*
+                    EPC =
+                    TOTAL PW
+                    */
+
+                    let epc = 0;
+
+                    /*
+                    ROUGH WEIGHT
+                    */
+
+                    let roughWt = 0;
+
+                    rows.forEach(r => {
+
+                        let part =
+                            parseInt(r['PartName']) || 0;
+
+                        if(part > mkPcs){
+
+                            mkPcs = part;
+
+                        }
+
+                        mkCts +=
+                            parseFloat(r['WT']) || 0;
+
+                        epc +=
+                            parseFloat(r['Pw']) || 0;
+
+                        if(roughWt === 0){
+
+                            roughWt =
+                                parseFloat(r['Rough Weight']) || 0;
+                        }
+
+                    });
+
+                    /*
+                    RTO%
+                    */
+
+                    let rto =
+                        roughWt > 0
+                        ?
+                        ((epc * 100) / roughWt)
+                        :
+                        0;
+
+                    currentData.push({
+
+                        'Kpn No': kapanNo,
+                        'Pkt No': pktNo,
+                        'Actual Wt': roughWt.toFixed(3),
+                        'RO.WT': roughWt.toFixed(3),
+                        'Mk.Pcs': mkPcs,
+                        'MK Cts': mkCts.toFixed(3),
+                        'E P C': epc.toFixed(3),
+                        'E.P.%': '',
+                        'Act RtoP%': '',
+                        'R TO P%': rto.toFixed(2)
+
+                    });
+
+                    resolve();
+
+                }
+
+            });
+
+        });
+
+    }
+
+    makeTable(currentData);
+
+    makeSummary(currentData);
+
+    document.getElementById('status')
+    .innerHTML =
+        kapan +
+        ' Report Generated';
+
+}
+
+function makeTable(data){
+
+    let head =
+        document.getElementById('head');
+
+    let body =
+        document.getElementById('body');
+
+    head.innerHTML = '';
+    body.innerHTML = '';
+
+    if(data.length === 0){
+
+        return;
+
+    }
+
+    let headers = [
+
+        'Kpn No',
+        'Pkt No',
+        'Actual Wt',
+        'RO.WT',
+        'Mk.Pcs',
+        'MK Cts',
+        'E P C',
+        'E.P.%',
+        'Act RtoP%',
+        'R TO P%'
+
+    ];
+
+    let hr = '<tr>';
+
+    headers.forEach(h => {
+
+        hr += `<th>${h}</th>`;
+
+    });
+
+    hr += '</tr>';
+
+    head.innerHTML = hr;
+
+    data.forEach(row => {
+
+        let tr = '<tr>';
+
+        headers.forEach(h => {
+
+            let cls = '';
+
+            if(
+                h.toLowerCase().includes('rto')
+            ){
+
+                cls = 'green';
+
+            }
+
+            if(
+                h.includes('%')
+            ){
+
+                cls = 'purple';
+
+            }
+
+            tr +=
+                `<td class="${cls}">` +
+                (row[h] || '') +
+                `</td>`;
+
+        });
+
+        tr += '</tr>';
+
+        body.innerHTML += tr;
+
+    });
+
+}
+
+function makeSummary(data){
+
+    let totalWeight = 0;
+    let totalMk = 0;
+    let totalEpc = 0;
+
+    data.forEach(r => {
+
+        totalWeight +=
+            parseFloat(
+                r['Actual Wt']
+            ) || 0;
+
+        totalMk +=
+            parseFloat(
+                r['Mk.Pcs']
+            ) || 0;
+
+        totalEpc +=
+            parseFloat(
+                r['E P C']
+            ) || 0;
+
+    });
+
+    let totalRto = 0;
+
+    if(totalWeight > 0){
+
+        totalRto =
+            (totalEpc * 100)
+            /
+            totalWeight;
+
+    }
+
+    document.getElementById('pcs')
+    .innerHTML =
+        data.length;
+
+    document.getElementById('rows')
+    .innerHTML =
+        totalMk;
+
+    document.getElementById('epcTotal')
+    .innerHTML =
+        totalEpc.toFixed(3);
+
+    document.getElementById('wt')
+    .innerHTML =
+        totalWeight.toFixed(3);
+
+    document.getElementById('rto')
+    .innerHTML =
+        totalRto.toFixed(2);
+
+}
+
+function filterData(){
+
+    let text =
+        document.getElementById('search')
+        .value
+        .toLowerCase();
+
+    if(text === ''){
+
+        makeTable(currentData);
+        makeSummary(currentData);
+
+        return;
+
+    }
+
+    let filtered =
+        currentData.filter(r => {
+
+            return Object.values(r)
+            .some(v =>
+
+                String(v)
+                .toLowerCase()
+                .includes(text)
+
+            );
+
+        });
+
+    makeTable(filtered);
+
+    makeSummary(filtered);
+
+}
+
+function reloadReport(){
+
+    let kapan =
+        document.getElementById('kapan')
+        .value;
+
+    if(kapan){
+
+        loadKapan(kapan);
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>
