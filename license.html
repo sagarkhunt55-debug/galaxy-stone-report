@@ -1,40 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Activate License</title>
-    <style>
-        body {
-            font-family: Arial;
-            text-align: center;
-            margin-top: 120px;
-        }
-        input {
-            width: 300px;
-            padding: 10px;
-            font-size: 16px;
-        }
-        button {
-            padding: 10px 20px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
-    </style>
+    <title>License</title>
 </head>
-
-<body>
+<body style="text-align:center;margin-top:120px;">
 
 <h2>Enter License Key</h2>
 
-<input id="key" placeholder="Enter key here" />
+<input id="key" style="padding:10px;width:300px;" />
 <br><br>
-<button onclick="activate()">Activate</button>
+
+<button onclick="sendKey()">Activate</button>
 
 <script>
 const { ipcRenderer } = require('electron');
 
-function activate() {
-    const key = document.getElementById('key').value;
-    ipcRenderer.send('validate-license', key);
+function sendKey() {
+    const key = document.getElementById("key").value;
+    ipcRenderer.send("check-license", key);
 }
 </script>
 
